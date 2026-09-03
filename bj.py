@@ -180,7 +180,6 @@ def dealer_score(game):
 
 
 def game_deal(game, bet):
-    game = game
     if game["stage"] == GameStage.ROUND_FINISHED:
         game = game_reset_round_state(game)
     elif game["stage"] != GameStage.NOT_STARTED:
