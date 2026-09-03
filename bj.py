@@ -7,118 +7,134 @@ from random import choice
 # CLASSES #
 # ------- #
 
-
-class Card(object):
-    value = None
-
-    class Suit(object):
-        SPADES = "Spades"
-        CLUBS = "Clubs"
-        HEARTS = "Hearts"
-        DIAMONDS = "Diamonds"
-
-    suit = None
-
-    @staticmethod
-    def all_suits():
-        return (Card.Suit.SPADES, Card.Suit.CLUBS, Card.Suit.HEARTS, Card.Suit.DIAMONDS)
-
-    def __init__(self, suit):
-        self.suit = suit
+# ---- #
+# card #
+# ---- #
 
 
-class PictureCard(Card):
-    class Kind(object):
-        KING = "King"
-        QUEEN = "Queen"
-        JACK = "Jack"
-        ACE = "Ace"
-
-    kind = None
-
-    @staticmethod
-    def all_kinds():
-        return (
-            PictureCard.Kind.KING,
-            PictureCard.Kind.QUEEN,
-            PictureCard.Kind.JACK,
-            PictureCard.Kind.ACE,
-        )
-
-    def __init__(self, suit, kind):
-        self.suit = suit
-        self.kind = kind
-        self.value = 11 if self.kind == PictureCard.Kind.ACE else 10
-
-    def __str__(self):
-        return "%s of %s" % (self.kind, self.suit)
-
-    def __repr__(self):
-        return str(self)
+class Suit(object):
+    SPADES = "Spades"
+    CLUBS = "Clubs"
+    HEARTS = "Hearts"
+    DIAMONDS = "Diamonds"
 
 
-class NumberCard(Card):
-    def __init__(self, suit, value):
-        self.suit = suit
-        self.value = value
-
-    def __str__(self):
-        return "%d of %s" % (self.value, self.suit)
-
-    def __repr__(self):
-        return str(self)
+SUITS = (Suit.SPADES, Suit.CLUBS, Suit.HEARTS, Suit.DIAMONDS)
 
 
-class Deck(object):
-    class Kind(object):
-        CSM = "Continuous Shuffling Machine"
-        SINGLE = "Single"
-        MDS = "Multi-Deck Shoe"
+def make_card(suit):
+    return {"type": "card", "suit": suit}
+
+
+class PictureCardKind(object):
+    KING = "King"
+    QUEEN = "Queen"
+    JACK = "Jack"
+    ACE = "Ace"
+
+
+PICTURE_CARD_KINDS = (
+    PictureCardKind.KING,
+    PictureCardKind.QUEEN,
+    PictureCardKind.JACK,
+    PictureCardKind.ACE,
+)
+
+
+def make_picture_card(suit, kind):
+    card = make_card(suit)
+    card["type"] = "picture_card"
+    card["kind"] = kind
+    card["value"] = 11 if kind == PictureCardKind.ACE else 10
+    return card
+
+
+def make_number_card(suit, value):
+    card = make_card(suit)
+    card["type"] = "picture_card"
+    card["value"] = value
+    return card
+
+
+def card_repr(card):
+    return "%s of %s" % (
+        card["kind"] if card["type"] == "picture_card" else card["value"],
+        card["suit"],
+    )
+
+
+def score_hand(hand):
+    score = 0
+    aces = 0
+    for card in hand:
+        if card.get("kind", None) == PictureCardKind.ACE:
+            # Ace
+            score += card["value"]
+            aces += 1
+        else:
+            score += card["value"]
+
+    while score > 21 and aces > 0:
+        score -= 10
+        aces -= 1
+    return score
+
+
+# ---- #
+# deck #
+# ---- #
+
+
+class DeckKind(object):
+    CSM = "Continuous Shuffling Machine"
+    SINGLE = "Single"
+    MDS = "Multi-Deck Shoe"
+
+
+DECK_KINDS = (DeckKind.CSM, DeckKind.SINGLE, DeckKind.MDS)
+
+
+def populate_decks(n):
+    one_deck = []
+    for suit in SUITS:
+        for number in range(2, 10):
+            one_deck.append(make_number_card(suit, number))
+        for kind in PICTURE_CARD_KINDS:
+            one_deck.append(make_picture_card(suit, kind))
 
     cards = []
-    kind = None
+    for _ in range(1, n):
+        cards += one_deck
 
-    def all_kinds():
-        return (Deck.Kind.CSM, Deck.Kind.SINGLE, Deck.Kind.MDS)
+    cards = cards[:52]
+    return cards
 
-    @staticmethod
-    def generate_decks(n):
-        one_deck = []
-        kinds = PictureCard.all_kinds()
-        suits = Card.all_suits()
-        for suit in suits:
-            for number in range(2, 10):
-                one_deck.append(NumberCard(suit, number))
-            for kind in kinds:
-                one_deck.append(PictureCard(suit, kind))
 
-        cards = []
-        for _ in range(1, n):
-            cards += one_deck
+def make_deck(kind, mds_deck_count=6):
+    num_decks = 1 if kind == DeckKind.SINGLE else mds_deck_count
+    return {
+        "type": "deck",
+        "kind": kind,
+        "num_decks": num_decks,
+        "cards": populate_decks(num_decks),
+    }
 
-        cards = cards[:52]
 
-        return cards
+def draw_from_deck(deck):
+    if deck["kind"] == DeckKind.CSM:
+        return (deck, choice(deck["cards"]))
+    elif deck["kind"] == DeckKind.SINGLE or deck["kind"] == DeckKind.MDS:
+        card = choice(deck["cards"])
+        deck["cards"].remove(card)
 
-    def __init__(self, kind):
-        self.kind = kind
+        if len(deck["cards"]) == 0:
+            deck["cards"] += populate_decks(deck["num_decks"])
+        return (deck, card)
 
-        # 1 if we're using a single deck, 6 if we're using a MDS,
-        # this field is ignored if we're using a CSM
-        self.num_decks = 1 if kind == Deck.Kind.SINGLE else 6
-        self.cards = Deck.generate_decks(self.num_decks)
 
-    def draw(self):
-        if self.kind == self.Kind.CSM:
-            return choice(self.cards)
-        elif self.kind == self.Kind.SINGLE or self.kind == self.Kind.MDS:
-            card = choice(self.cards)
-            self.cards.remove(card)
-
-            if len(self.cards) == 0:
-                self.cards += Deck.single_deck(self.num_decks)
-
-            return card
+# ---------- #
+# game state #
+# ---------- #
 
 
 class GameStage(object):
@@ -138,129 +154,148 @@ class GameResult(object):
     DEALER_BJ = 5
 
 
-class GameState(object):
-    balance = 0
-    game_result = None
+def game_reset_round_state(game):
+    game["stage"] = GameStage.NOT_STARTED
+    game["result"] = None
+    game["player_hand"] = []
+    game["hole_card"] = None
+    game["dealer_hand"] = []
+    game["player_standing"] = False
+    game["player_turn"] = True
+    return game
 
-    def reset_round_state(self):
-        self.stage = GameStage.NOT_STARTED
-        self.game_result = None
-        self.player_hand = []
-        self.hole_card = None
-        self.dealer_hand = []
-        self.player_standing = False
-        self.player_turn = True
 
-    def __init__(self, deck, starting_balance):
-        self.deck = deck
-        self.balance = starting_balance
-        self.reset_round_state()
+def make_game(deck, starting_balance):
+    return game_reset_round_state(
+        {"type": "game", "deck": deck, "balance": starting_balance}
+    )
 
-    def deal(self, bet):
-        if self.stage == GameStage.ROUND_FINISHED:
-            self.reset_round_state()
-        elif self.stage != GameStage.NOT_STARTED:
-            raise Exception("Invalid game stage")
 
-        self.bet = bet
-        self.player_hand = [self.deck.draw(), self.deck.draw()]
-        self.hole_card = self.deck.draw()
-        self.dealer_hand = [self.deck.draw()]
-        self.stage = GameStage.PLAYING
+def player_score(game):
+    return score_hand(game["player_hand"])
 
-        # Evaluate natural blackjack
-        player_bj = 21 == self.player_score
-        dealer_bj = 21 == self.dealer_score
-        if player_bj or dealer_bj:
-            self.stage = GameStage.ROUND_FINISHED
-            if player_bj and dealer_bj:
-                self.game_result = GameResult.TIE
-            elif player_bj and not dealer_bj:
-                self.balance += 1.5 * self.bet
-                self.game_result = GameResult.PLAYER_BJ
-            elif dealer_bj and not player_bj:
-                self.balance -= self.bet
-                self.game_result = GameResult.DEALER_BJ
 
-    @staticmethod
-    def score_hand(hand):
-        score = 0
-        aces = 0
-        for card in hand:
-            if isinstance(card, PictureCard) and card.kind == PictureCard.Kind.ACE:
-                # Ace
-                score += card.value
-                aces += 1
-            else:
-                score += card.value
+def dealer_score(game):
+    return score_hand([game["hole_card"]] + game["dealer_hand"])
 
-        while score > 21 and aces > 0:
-            score -= 10
-            aces -= 1
 
-        return score
+def game_deal(game, bet):
+    game = game
+    if game["stage"] == GameStage.ROUND_FINISHED:
+        game = game_reset_round_state(game)
+    elif game["stage"] != GameStage.NOT_STARTED:
+        raise Exception("Invalid game stage")
 
-    @property
-    def player_score(self):
-        return self.score_hand(self.player_hand)
+    game["bet"] = bet
+    game["player_hand"] = [draw_from_deck(game["deck"]), draw_from_deck(game["deck"])]
+    game["hole_card"] = draw_from_deck(game["deck"])
+    game["dealer_hand"] = [draw_from_deck(game["deck"])]
+    game["stage"] = GameStage.PLAYING
 
-    @property
-    def dealer_score(self):
-        return self.score_hand([self.hole_card] + self.dealer_hand)
+    # Evaluate natural blackjack
+    player_bj = 21 == player_score(game)
+    dealer_bj = 21 == dealer_score(game)
+    if player_bj or dealer_bj:
+        game["stage"] = GameStage.ROUND_FINISHED
+        if player_bj and dealer_bj:
+            game["result"] = GameResult.TIE
+        elif player_bj and not dealer_bj:
+            game["balance"] += 1.5 * game["bet"]
+            game["result"] = GameResult.PLAYER_BJ
+        elif dealer_bj and not player_bj:
+            game["balance"] -= game["bet"]
+            game["result"] = GameResult.DEALER_BJ
+    return game
 
-    def print_hands(self):
-        print("Player: %s %s" % (self.player_score, self.player_hand))
-        print(
-            "Dealer: %s [%s] | %s"
-            % (self.dealer_score, self.hole_card, self.dealer_hand)
-        )
 
-    def assert_playing(self):
-        if self.stage != GameStage.PLAYING:
-            raise Exception("Invalid game stage")
+def game_hand_repr(game):
+    return "Player: %s %s" % (
+        player_score(game),
+        game["player_hand"],
+    ) + "Dealer: %s [%s] | %s" % (
+        dealer_score(game),
+        game["hole_card"],
+        game["dealer_hand"],
+    )
 
-    def assert_first_round(self):
-        if len(self.player_hand) != 2:
-            raise Exception("Not first round")
 
-    def assert_player_turn(self):
-        if not self.player_turn:
-            raise Exception("It is not the player's turn")
-        if self.player_standing:
-            raise Exception("Player is standing")
+def game_assert_playing(game):
+    if game["stage"] != GameStage.PLAYING:
+        raise Exception("Invalid game stage")
 
-    def action_surrender(self):
-        self.assert_playing()
-        self.assert_first_round()
-        self.assert_player_turn()
 
-        self.balance -= self.bet / 2
-        self.stage = GameStage.ROUND_FINISHED
-        self.game_result = GameResult.DEALER_WINS
+def game_assert_first_round(game):
+    game_assert_playing(game)
+    if len(game["player_hand"]) != 2:
+        raise Exception("Not first round")
 
-    def action_double_down(self):
-        self.assert_playing()
-        self.assert_first_round()
-        self.assert_player_turn()
 
-        self.bet *= 2
-        self.player_hand.append(self.deck.draw())
+def game_assert_player_turn(game):
+    if not game["player_turn"]:
+        raise Exception("It is not the player's turn")
+    if game["player_standing"]:
+        raise Exception("Player is standing")
 
-    def action_stand(self):
-        self.assert_player_turn()
-        self.assert_playing()
 
-        self.player_standing = True
+def game_assert_not_player_turn(game):
+    if game["player_turn"]:
+        raise Exception("It is the player's turn")
 
-    def action_hit_player(self):
-        self.assert_playing()
-        self.assert_player_turn()
 
-        self.player_hand.append(self.deck.draw())
+def game_action_surrender(game):
+    game_assert_playing(game)
+    game_assert_first_round(game)
+    game_assert_player_turn(game)
 
-        if self.player_score > 21:
-            self.balance -= self.bet
-            self.stage = GameStage.ROUND_FINISHED
-            self.game_result = GameResult.PLAYER_BUSTS
+    game["balance"] -= game["bet"] / 2
+    game["stage"] = GameStage.ROUND_FINISHED
+    game["result"] = GameResult.DEALER_WINS
+    game["player_turn"] = False
+    return game
 
-        # TODO: if the player hits 21 or under, we need to let at least one more dealer turn go ahead and potentially more player turns go ahead
+
+def game_action_double_down(game):
+    game_assert_playing(game)
+    game_assert_first_round(game)
+    game_assert_player_turn(game)
+
+    game["bet"] *= 2
+    game["player_hand"].append(draw_from_deck(game["deck"]))
+    game["player_turn"] = False
+    return game
+
+
+def game_action_stand(game):
+    game_assert_playing(game)
+    game_assert_player_turn(game)
+
+    game["player_standing"] = True
+    game["player_turn"] = False
+    return game
+
+
+def game_action_hit_player(game):
+    game_assert_playing(game)
+    game_assert_player_turn(game)
+
+    game["player_hand"].append(draw_from_deck(game["deck"]))
+
+    if player_score(game) > 21:
+        game["balance"] -= game["bet"]
+        game["stage"] = GameStage.ROUND_FINISHED
+        game["result"] = GameResult.PLAYER_BUSTS
+
+    game["player_turn"] = False
+    return game
+
+
+def game_action_hit_dealer(game):
+    game_assert_playing(game)
+    game_assert_not_player_turn()
+
+    game["dealer_hand"].append(draw_from_deck(game["deck"]))
+
+    if dealer_score(game) > 21:
+        game["balance"] += game["bet"]
+        game["stage"] = GameStage.ROUND_FINISHED
+        game["result"] = GameResult.DEALER_BUSTS
