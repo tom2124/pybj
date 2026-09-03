@@ -299,3 +299,6 @@ def game_action_hit_dealer(game):
         game["balance"] += game["bet"]
         game["stage"] = GameStage.ROUND_FINISHED
         game["result"] = GameResult.DEALER_BUSTS
+
+    game["player_turn"] = True
+    return game
