@@ -1,7 +1,21 @@
-from __future__ import division
-from __builtins__ import print
+from __future__ import division, print_function
 
 from random import choice
+
+# ---- #
+# util #
+# ---- #
+
+
+def removeArrayObjectElem(arr, obj):
+    d = dict(obj)
+    i = 0
+    for elem in arr:
+        if dict(elem) == d:
+            return arr.pop(i)
+        i += 1
+    raise Exception("Element not found in array")
+
 
 # ------- #
 # CLASSES #
@@ -51,7 +65,7 @@ def make_picture_card(suit, kind):
 
 def make_number_card(suit, value):
     card = make_card(suit)
-    card["type"] = "picture_card"
+    card["type"] = "number_card"
     card["value"] = value
     return card
 
@@ -167,7 +181,12 @@ def game_reset_round_state(game):
 
 def make_game(deck, starting_balance):
     return game_reset_round_state(
-        {"type": "game", "deck": deck, "balance": starting_balance}
+        {
+            "type": "game",
+            "deck": deck,
+            "balance": starting_balance,
+            "bet": starting_balance / 10,
+        }
     )
 
 
@@ -176,7 +195,7 @@ def player_score(game):
 
 
 def dealer_score(game):
-    return score_hand([game["hole_card"]] + game["dealer_hand"])
+    return score_hand([game["hole_card"]] + list(game["dealer_hand"]))
 
 
 def game_deal(game, bet):
