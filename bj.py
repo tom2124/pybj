@@ -1,4 +1,5 @@
 from __future__ import division, print_function
+from pprint import pprint, pformat
 
 from random import choice
 
@@ -111,13 +112,13 @@ DECK_KINDS = (DeckKind.CSM, DeckKind.SINGLE, DeckKind.MDS)
 def populate_decks(n):
     one_deck = []
     for suit in SUITS:
-        for number in range(2, 10):
+        for number in range(2, 11):
             one_deck.append(make_number_card(suit, number))
         for kind in PICTURE_CARD_KINDS:
             one_deck.append(make_picture_card(suit, kind))
 
     cards = []
-    for _ in range(1, n):
+    for _ in range(n):
         cards += one_deck
 
     cards = cards[:52]
@@ -136,14 +137,14 @@ def make_deck(kind, mds_deck_count=6):
 
 def draw_from_deck(deck):
     if deck["kind"] == DeckKind.CSM:
-        return (deck, choice(deck["cards"]))
+        return choice(deck["cards"])
     elif deck["kind"] == DeckKind.SINGLE or deck["kind"] == DeckKind.MDS:
         card = choice(deck["cards"])
-        deck["cards"].remove(card)
+        removeArrayObjectElem(deck["cards"], card)
 
         if len(deck["cards"]) == 0:
             deck["cards"] += populate_decks(deck["num_decks"])
-        return (deck, card)
+        return card
 
 
 # ---------- #
@@ -175,6 +176,7 @@ def game_reset_round_state(game):
     game["hole_card"] = None
     game["dealer_hand"] = []
     game["player_standing"] = False
+    game["dealer_standing"] = False
     game["player_turn"] = True
     return game
 
@@ -229,11 +231,11 @@ def game_deal(game, bet):
 def game_hand_repr(game):
     return "Player: %s %s" % (
         player_score(game),
-        game["player_hand"],
-    ) + "Dealer: %s [%s] | %s" % (
+        map(card_repr, game["player_hand"]),
+    ) + "\nDealer: %s <(%s)> | %s" % (
         dealer_score(game),
-        game["hole_card"],
-        game["dealer_hand"],
+        card_repr(game["hole_card"]),
+        map(card_repr, game["dealer_hand"]),
     )
 
 
@@ -260,6 +262,14 @@ def game_assert_not_player_turn(game):
         raise Exception("It is the player's turn")
 
 
+def game_assert_scores_lte_21(game):
+    p = player_score(game)
+    d = dealer_score(game)
+    if p > 21 or d > 21:
+        raise Exception("Player or dealer busted")
+    return (p, d)
+
+
 def game_action_surrender(game):
     game_assert_playing(game)
     game_assert_first_round(game)
@@ -279,7 +289,11 @@ def game_action_double_down(game):
 
     game["bet"] *= 2
     game["player_hand"].append(draw_from_deck(game["deck"]))
+    game["player_standing"] = True
     game["player_turn"] = False
+
+    game_check_both_standing(game)
+
     return game
 
 
@@ -289,6 +303,34 @@ def game_action_stand(game):
 
     game["player_standing"] = True
     game["player_turn"] = False
+
+    game_check_both_standing()
+
+    return game
+
+
+def game_check_both_standing(game):
+    game_assert_playing(game)
+    p, d = game_assert_scores_lte_21(game)
+    if game["dealer_standing"] and game["player_standing"]:
+        # We don't need to check if anyone has a natural blackjack;
+        # that's handled during the initial deal logic.
+        # We also don't need to check if the player or dealer have
+        # busted, that's handled in the hit logic
+
+        # We know that both scores are <= 21
+        if p > d:
+            game["balance"] += game["bet"]
+            game["stage"] = GameStage.ROUND_FINISHED
+            game["result"] = GameResult.PLAYER_WINS
+        elif d > p:
+            game["balance"] -= game["bet"]
+            game["stage"] = GameStage.ROUND_FINISHED
+            game["result"] = GameResult.DEALER_WINS
+        elif d == p:
+            game["stage"] = GameStage.ROUND_FINISHED
+            game["result"] = GameResult.TIE
+
     return game
 
 
@@ -302,6 +344,9 @@ def game_action_hit_player(game):
         game["balance"] -= game["bet"]
         game["stage"] = GameStage.ROUND_FINISHED
         game["result"] = GameResult.PLAYER_BUSTS
+    elif player_score(game) == 21:
+        game["player_standing"] = True
+        game_check_both_standing()
 
     game["player_turn"] = False
     return game
@@ -309,7 +354,7 @@ def game_action_hit_player(game):
 
 def game_action_hit_dealer(game):
     game_assert_playing(game)
-    game_assert_not_player_turn()
+    game_assert_not_player_turn(game)
 
     game["dealer_hand"].append(draw_from_deck(game["deck"]))
 
@@ -317,6 +362,9 @@ def game_action_hit_dealer(game):
         game["balance"] += game["bet"]
         game["stage"] = GameStage.ROUND_FINISHED
         game["result"] = GameResult.DEALER_BUSTS
+    elif dealer_score(game) >= 17:
+        game["dealer_standing"] = True
+        game_check_both_standing()
 
     game["player_turn"] = True
     return game
