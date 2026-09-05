@@ -18,6 +18,10 @@ def removeArrayObjectElem(arr, obj):
     raise Exception("Element not found in array")
 
 
+def noneOrStr(obj):
+    return "None" if obj is None else str(obj)
+
+
 # ------- #
 # CLASSES #
 # ------- #
@@ -102,7 +106,7 @@ def score_hand(hand):
 
 class DeckKind(object):
     CSM = "Continuous Shuffling Machine"
-    SINGLE = "Single"
+    SINGLE = "Single Deck"
     MDS = "Multi-Deck Shoe"
 
 
@@ -147,26 +151,30 @@ def draw_from_deck(deck):
         return card
 
 
+def deck_repr(deck):
+    return "[%d] %s" % (len(deck["cards"], deck["kind"]))
+
+
 # ---------- #
 # game state #
 # ---------- #
 
 
 class GameStage(object):
-    NOT_STARTED = -1
-    PLAYING = 0
-    ROUND_FINISHED = 1
-    OUT_OF_MONEY = 2
+    NOT_STARTED = "Not started"
+    PLAYING = "Playing"
+    ROUND_FINISHED = "Round finished"
+    OUT_OF_MONEY = "Out of money"
 
 
 class GameResult(object):
-    DEALER_WINS = -1
-    TIE = 0
-    PLAYER_BUSTS = 1
-    DEALER_BUSTS = 2
-    PLAYER_WINS = 3
-    PLAYER_BJ = 4
-    DEALER_BJ = 5
+    DEALER_WINS = "Dealer wins"
+    TIE = "Tie"
+    PLAYER_BUSTS = "Player busts"
+    DEALER_BUSTS = "Dealer busts"
+    PLAYER_WINS = "Player wins"
+    PLAYER_BJ = "Player blackjack"
+    DEALER_BJ = "Dealer blackjack"
 
 
 def game_reset_round_state(game):
@@ -228,11 +236,25 @@ def game_deal(game, bet):
     return game
 
 
+def game_repr(game):
+    return (
+        "Stage: %s" % game["stage"]
+        + "\nResult: %s" % game["result"]
+        + "\nBalance: $%d" % game["balance"]
+        + "\nBet: $%d" % game["bet"]
+        + "\nPlayer turn? %s" % game["player_turn"]
+        + "\nPlayer standing? %s" % game["player_standing"]
+        + "\nDealer standing? %s" % game["dealer_standing"]
+        + "\n"
+        + game_hand_repr(game)
+    )
+
+
 def game_hand_repr(game):
-    return "Player: %s %s" % (
+    return "Player hand: %s %s" % (
         player_score(game),
         map(card_repr, game["player_hand"]),
-    ) + "\nDealer: %s <(%s)> | %s" % (
+    ) + "\nDealer hand: %s <(%s)> | %s" % (
         dealer_score(game),
         card_repr(game["hole_card"]),
         map(card_repr, game["dealer_hand"]),
