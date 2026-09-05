@@ -177,7 +177,7 @@ class GameResult(object):
     DEALER_BJ = "Dealer blackjack"
 
 
-def game_reset_round_state(game):
+def game_reset_round_state(game, deal=True):
     game["stage"] = GameStage.NOT_STARTED
     game["result"] = None
     game["player_hand"] = []
@@ -186,6 +186,10 @@ def game_reset_round_state(game):
     game["player_standing"] = False
     game["dealer_standing"] = False
     game["player_turn"] = True
+
+    if deal:
+        game_deal(game, game["bet"])
+
     return game
 
 
@@ -251,19 +255,27 @@ def game_repr(game):
 
 
 def game_hand_repr(game):
-    return "Player hand: %s %s" % (
-        player_score(game),
-        map(card_repr, game["player_hand"]),
-    ) + "\nDealer hand: %s <(%s)> | %s" % (
-        dealer_score(game),
-        card_repr(game["hole_card"]),
-        map(card_repr, game["dealer_hand"]),
-    )
+    if game["stage"] == GameStage.NOT_STARTED:
+        return "Player hand: Empty\nDealer hand: Empty"
+    else:
+        return "Player hand: %s %s" % (
+            player_score(game),
+            map(card_repr, game["player_hand"]),
+        ) + "\nDealer hand: %s <(%s)> | %s" % (
+            dealer_score(game),
+            card_repr(game["hole_card"]),
+            map(card_repr, game["dealer_hand"]),
+        )
+
+
+def game_assert_started(game):
+    if game["stage"] == GameStage.NOT_STARTED:
+        raise Exception("Game Not Started")
 
 
 def game_assert_playing(game):
     if game["stage"] != GameStage.PLAYING:
-        raise Exception("Invalid game stage")
+        raise Exception("Game is not in play")
 
 
 def game_assert_first_round(game):
@@ -326,7 +338,7 @@ def game_action_stand(game):
     game["player_standing"] = True
     game["player_turn"] = False
 
-    game_check_both_standing()
+    game_check_both_standing(game)
 
     return game
 
@@ -368,7 +380,7 @@ def game_action_hit_player(game):
         game["result"] = GameResult.PLAYER_BUSTS
     elif player_score(game) == 21:
         game["player_standing"] = True
-        game_check_both_standing()
+        game_check_both_standing(game)
 
     game["player_turn"] = False
     return game
@@ -385,8 +397,9 @@ def game_action_hit_dealer(game):
         game["stage"] = GameStage.ROUND_FINISHED
         game["result"] = GameResult.DEALER_BUSTS
     elif dealer_score(game) >= 17:
+        # Dealer stands on all 17s
         game["dealer_standing"] = True
-        game_check_both_standing()
+        game_check_both_standing(game)
 
-    game["player_turn"] = True
+    game["player_turn"] = not game["player_standing"]
     return game
