@@ -1,5 +1,6 @@
 from __future__ import division, print_function
-from pprint import pprint, pformat
+from pprint import pprint
+from pprint import pformat as pf
 
 from random import choice
 
@@ -15,7 +16,7 @@ def removeArrayObjectElem(arr, obj):
         if dict(elem) == d:
             return arr.pop(i)
         i += 1
-    raise Exception("Element not found in array")
+    raise Exception("Element (%s) not found in array (%s)" % (pf(obj), pf(arr)))
 
 
 def noneOrStr(obj):
@@ -152,7 +153,7 @@ def draw_from_deck(deck):
 
 
 def deck_repr(deck):
-    return "[%d] %s" % (len(deck["cards"], deck["kind"]))
+    return "[%d] %s" % (len(deck["cards"]), deck["kind"])
 
 
 # ---------- #
@@ -177,18 +178,23 @@ class GameResult(object):
     DEALER_BJ = "Dealer blackjack"
 
 
+GAME_STATE_DEFAULTS = {
+    "stage": GameStage.NOT_STARTED,
+    "result": None,
+    "player_hand": [],
+    "hole_card": None,
+    "dealer_hand": [],
+    "player_standing": False,
+    "dealer_standing": False,
+    "player_turn": True,
+}
+
+
 def game_reset_round_state(game, deal=True):
-    game["stage"] = GameStage.NOT_STARTED
-    game["result"] = None
-    game["player_hand"] = []
-    game["hole_card"] = None
-    game["dealer_hand"] = []
-    game["player_standing"] = False
-    game["dealer_standing"] = False
-    game["player_turn"] = True
+    game.update(GAME_STATE_DEFAULTS)
 
     if deal:
-        game_deal(game, game["bet"])
+        game_deal(game)
 
     return game
 
@@ -212,21 +218,24 @@ def dealer_score(game):
     return score_hand([game["hole_card"]] + list(game["dealer_hand"]))
 
 
-def game_deal(game, bet):
+def game_deal(game):
     if game["stage"] == GameStage.ROUND_FINISHED:
-        game = game_reset_round_state(game)
+        game_reset_round_state(game, deal=False)
     elif game["stage"] != GameStage.NOT_STARTED:
-        raise Exception("Invalid game stage")
+        raise Exception(
+            "Invalid game stage %s (expected %s)"
+            % (game["stage"], GameStage.NOT_STARTED)
+        )
 
-    game["bet"] = bet
     game["player_hand"] = [draw_from_deck(game["deck"]), draw_from_deck(game["deck"])]
     game["hole_card"] = draw_from_deck(game["deck"])
     game["dealer_hand"] = [draw_from_deck(game["deck"])]
     game["stage"] = GameStage.PLAYING
 
     # Evaluate natural blackjack
+    dealer = dealer_score(game)
     player_bj = 21 == player_score(game)
-    dealer_bj = 21 == dealer_score(game)
+    dealer_bj = 21 == dealer
     if player_bj or dealer_bj:
         game["stage"] = GameStage.ROUND_FINISHED
         if player_bj and dealer_bj:
@@ -237,6 +246,10 @@ def game_deal(game, bet):
         elif dealer_bj and not player_bj:
             game["balance"] -= game["bet"]
             game["result"] = GameResult.DEALER_BJ
+
+    # Check if the dealer should now be standing
+    if dealer >= 17:
+        game["dealer_standing"] = True
     return game
 
 
@@ -270,18 +283,19 @@ def game_hand_repr(game):
 
 def game_assert_started(game):
     if game["stage"] == GameStage.NOT_STARTED:
-        raise Exception("Game Not Started")
+        raise Exception("Game Not Started (game state is %s)" % game["stage"])
 
 
 def game_assert_playing(game):
     if game["stage"] != GameStage.PLAYING:
-        raise Exception("Game is not in play")
+        raise Exception("Game is not in play (game state is %s)" % game["stage"])
 
 
 def game_assert_first_round(game):
     game_assert_playing(game)
-    if len(game["player_hand"]) != 2:
-        raise Exception("Not first round")
+    ncards = len(game["player_hand"])
+    if ncards != 2:
+        raise Exception("Not first round (player hand has %d cards)" % ncards)
 
 
 def game_assert_player_turn(game):
@@ -382,7 +396,7 @@ def game_action_hit_player(game):
         game["player_standing"] = True
         game_check_both_standing(game)
 
-    game["player_turn"] = False
+    game["player_turn"] = not game["dealer_standing"]
     return game
 
 
