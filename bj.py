@@ -184,6 +184,7 @@ GAME_STATE_DEFAULTS = {
     "player_hand": [],
     "hole_card": None,
     "dealer_hand": [],
+    "player_doubling": False,
     "player_standing": False,
     "dealer_standing": False,
     "player_turn": True,
@@ -227,9 +228,11 @@ def game_deal(game):
             % (game["stage"], GameStage.NOT_STARTED)
         )
 
-    game["player_hand"] = [draw_from_deck(game["deck"]), draw_from_deck(game["deck"])]
-    game["hole_card"] = draw_from_deck(game["deck"])
-    game["dealer_hand"] = [draw_from_deck(game["deck"])]
+    draw = lambda: draw_from_deck(game["deck"])
+    game["player_hand"] = [draw(), draw()]
+    game["hole_card"] = draw()
+    game["dealer_hand"] = [draw()]
+
     game["stage"] = GameStage.PLAYING
 
     # Evaluate natural blackjack
@@ -244,12 +247,22 @@ def game_deal(game):
             game["balance"] += 1.5 * game["bet"]
             game["result"] = GameResult.PLAYER_BJ
         elif dealer_bj and not player_bj:
-            game["balance"] -= game["bet"]
+            game_take_player_bet(game)
             game["result"] = GameResult.DEALER_BJ
 
     # Check if the dealer should now be standing
     if dealer >= 17:
         game["dealer_standing"] = True
+    return game
+
+
+def game_pay_player(game):
+    game["balance"] += game["bet"] * (1 + int(game["player_doubling"]))
+    return game
+
+
+def game_take_player_bet(game, multiplier=1):
+    game["balance"] -= game["bet"] * multiplier
     return game
 
 
@@ -323,7 +336,7 @@ def game_action_surrender(game):
     game_assert_first_round(game)
     game_assert_player_turn(game)
 
-    game["balance"] -= game["bet"] / 2
+    game_take_player_bet(game, 0.5)
     game["stage"] = GameStage.ROUND_FINISHED
     game["result"] = GameResult.DEALER_WINS
     game["player_turn"] = False
@@ -335,12 +348,17 @@ def game_action_double_down(game):
     game_assert_first_round(game)
     game_assert_player_turn(game)
 
-    game["bet"] *= 2
+    game["player_doubling"] = True
     game["player_hand"].append(draw_from_deck(game["deck"]))
-    game["player_standing"] = True
-    game["player_turn"] = False
 
-    game_check_both_standing(game)
+    if player_score(game) > 21:
+        game_take_player_bet(game)
+        game["stage"] = GameStage.ROUND_FINISHED
+        game["result"] = GameResult.PLAYER_BUSTS
+    else:
+        game["player_standing"] = True
+        game["player_turn"] = False
+        game_check_both_standing(game)
 
     return game
 
@@ -368,11 +386,11 @@ def game_check_both_standing(game):
 
         # We know that both scores are <= 21
         if p > d:
-            game["balance"] += game["bet"]
+            game_pay_player(game)
             game["stage"] = GameStage.ROUND_FINISHED
             game["result"] = GameResult.PLAYER_WINS
         elif d > p:
-            game["balance"] -= game["bet"]
+            game_take_player_bet(game)
             game["stage"] = GameStage.ROUND_FINISHED
             game["result"] = GameResult.DEALER_WINS
         elif d == p:
@@ -389,14 +407,14 @@ def game_action_hit_player(game):
     game["player_hand"].append(draw_from_deck(game["deck"]))
 
     if player_score(game) > 21:
-        game["balance"] -= game["bet"]
+        game_take_player_bet(game)
         game["stage"] = GameStage.ROUND_FINISHED
         game["result"] = GameResult.PLAYER_BUSTS
     elif player_score(game) == 21:
         game["player_standing"] = True
         game_check_both_standing(game)
 
-    game["player_turn"] = not game["dealer_standing"]
+    game["player_turn"] = game["dealer_standing"]
     return game
 
 
@@ -407,7 +425,7 @@ def game_action_hit_dealer(game):
     game["dealer_hand"].append(draw_from_deck(game["deck"]))
 
     if dealer_score(game) > 21:
-        game["balance"] += game["bet"]
+        game_pay_player(game)
         game["stage"] = GameStage.ROUND_FINISHED
         game["result"] = GameResult.DEALER_BUSTS
     elif dealer_score(game) >= 17:
