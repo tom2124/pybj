@@ -263,6 +263,8 @@ def game_pay_player(game):
 
 def game_take_player_bet(game, multiplier=1):
     game["balance"] -= game["bet"] * multiplier
+    if game["balance"] <= 0:
+        game["result"] = GameStage.OUT_OF_MONEY
     return game
 
 
